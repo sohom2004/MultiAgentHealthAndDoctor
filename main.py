@@ -86,11 +86,9 @@ def is_search_command(text: str) -> bool:
     
     text_lower = text.lower().strip()
     
-    # Check for explicit --search flag
     if '--search' in text_lower or text_lower == 'search':
         return True
     
-    # Check for search keywords
     for keyword in search_keywords:
         if keyword in text_lower:
             return True
@@ -111,7 +109,6 @@ def parse_command(command: str, current_patient: str) -> dict:
     """
     command = command.strip()
     
-    # Handle special commands
     if command.lower() in ['--exit', 'exit', 'quit', '--quit']:
         return {"action": "exit"}
     
@@ -121,7 +118,6 @@ def parse_command(command: str, current_patient: str) -> dict:
     if not command:
         return {"action": "empty"}
     
-    # Parse arguments
     result = {
         "action": "process",
         "file_path": None,
@@ -130,47 +126,38 @@ def parse_command(command: str, current_patient: str) -> dict:
         "is_search": False
     }
     
-    # Check for --patient flag
     if '--patient' in command:
         parts = command.split('--patient', 1)
         command = parts[0].strip()
         patient_part = parts[1].strip()
-        # Extract patient ID (first word after --patient)
         patient_words = patient_part.split()
         if patient_words:
             result["patient_id"] = patient_words[0]
-            # Remove patient ID from command
             remaining = ' '.join(patient_words[1:])
             command = command + ' ' + remaining
     
     command = command.strip()
     
-    # Check if this is a search command
     if is_search_command(command):
         result["is_search"] = True
         result["action"] = "search"
         return result
     
-    # Check for --file flag
     if '--file' in command:
         parts = command.split('--file', 1)
         if len(parts) > 1:
-            file_path = parts[1].strip().split()[0]  # Get first word after --file
+            file_path = parts[1].strip().split()[0]  
             result["file_path"] = file_path
-            # Remove --file part for text processing
             remaining_text = ' '.join(parts[1].strip().split()[1:])
             command = parts[0].strip() + ' ' + remaining_text
     
-    # Check for --text flag
     if '--text' in command:
         parts = command.split('--text', 1)
         if len(parts) > 1:
             result["text_input"] = parts[1].strip()
     elif not result["file_path"] and command:
-        # If no explicit --text flag but there's text, treat it as text input
         result["text_input"] = command
     
-    # Validate
     if not result["file_path"] and not result["text_input"]:
         return {"action": "invalid", "message": "Please provide either --file or --text"}
     
@@ -192,7 +179,6 @@ def process_search_command(patient_id: str) -> str:
         print(f"👤 Patient ID: {patient_id}")
         print("⏳ Please wait...\n")
         
-        # Run search workflow
         result = run_search_workflow(patient_id=patient_id)
         
         return result.get("final_response", "No search results generated")
@@ -216,14 +202,12 @@ def process_report_command(cmd_dict: dict) -> str:
         text_input = cmd_dict.get("text_input")
         patient_id = cmd_dict.get("patient_id", "pt-001")
         
-        # Determine input type
         if file_path:
             file_path_obj = Path(file_path)
             
             if not file_path_obj.exists():
                 return f"ERROR: File not found: {file_path}"
             
-            # Determine file type
             suffix = file_path_obj.suffix.lower()
             
             if suffix == ".pdf":
@@ -239,14 +223,12 @@ def process_report_command(cmd_dict: dict) -> str:
             print(f"👤 Patient ID: {patient_id}")
             print("⏳ Please wait...\n")
             
-            # Run workflow
             result = run_report_workflow(
                 input_type=input_type,
                 file_path=str(file_path_obj),
                 patient_id=patient_id
             )
             
-            # Cleanup
             cleanup_temp_files()
             
             return result.get("final_response", "No response generated")
@@ -256,7 +238,6 @@ def process_report_command(cmd_dict: dict) -> str:
             print(f"👤 Patient ID: {patient_id}")
             print("⏳ Please wait...\n")
             
-            # Run workflow
             result = run_report_workflow(
                 input_type="text",
                 text_input=text_input,
@@ -286,16 +267,13 @@ def main():
     
     while True:
         try:
-            # Get user input
             user_input = input(f"[{current_patient}] > ").strip()
             
             if not user_input:
                 continue
             
-            # Parse command
             cmd_dict = parse_command(user_input, current_patient)
             
-            # Handle actions
             if cmd_dict["action"] == "exit":
                 print("\n👋 Thank you for using Medical Agentic System. Goodbye!\n")
                 break
@@ -312,22 +290,18 @@ def main():
                 continue
             
             elif cmd_dict["action"] == "search":
-                # Update current patient if changed
                 if cmd_dict["patient_id"] != current_patient:
                     current_patient = cmd_dict["patient_id"]
                     print(f"\n✓ Switched to Patient ID: {current_patient}\n")
                 
-                # Process search command
                 response = process_search_command(current_patient)
                 print(f"\n{response}\n")
             
             elif cmd_dict["action"] == "process":
-                # Update current patient if changed
                 if cmd_dict["patient_id"] != current_patient:
                     current_patient = cmd_dict["patient_id"]
                     print(f"\n✓ Switched to Patient ID: {current_patient}\n")
                 
-                # Process the report command
                 response = process_report_command(cmd_dict)
                 print(f"\n{response}\n")
         
