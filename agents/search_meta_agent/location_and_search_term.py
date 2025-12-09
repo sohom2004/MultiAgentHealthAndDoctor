@@ -65,13 +65,13 @@ def run_search_term_and_location(user_id: str) -> dict:
 
     Given the patient's medical information, do the following:
     1. Use the GetUserSummaries tool to fetch the most recent report summary for user_id: {user_id}
-    2. Identify the most appropriate doctor specialization (e.g., Cardiologist, Nephrologist, Pulmonologist, etc.)
-       based on the symptoms, diagnosis, or treatment described in the summary.
+    2. Identify the most appropriate and specific doctor subspecialization (e.g., instead of Cardiologist specify Electrophysiologist, instead of Gastroenterologist specify Hepatologist, etc.)
+       based on the symptoms, diagnosis, or treatment described in the summary, not just the broad category.
     3. Use the GetUserLocation tool to fetch the current user location.
     4. Return BOTH the doctor type and location as a structured JSON in the format:
 
     {{
-      "doctor_type": "<doctor specialization>",
+      "doctor_type": "<doctor subspecialization>",
       "location": {{
         "city": "<city>",
         "state": "<state>",
