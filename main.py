@@ -11,7 +11,7 @@ from tools.ocr_tools import cleanup_temp_files
 def print_banner():
     """Prints the welcome banner"""
     print("\n" + "="*70)
-    print("  MEDICAL REPORT DIAGNOSIS AGENTIC SYSTEM")
+    print("MedInsight - MEDICAL REPORT DIAGNOSIS AGENTIC SYSTEM")
     print("  Continuous Terminal Interface")
     print("="*70)
     print("\nCommands:")

@@ -6,9 +6,6 @@ import json
 import re
 
 
-import re
-
-
 def clean_json_response(content: str) -> str:
     """
     Cleans JSON response by removing markdown code blocks and extra text
@@ -114,7 +111,6 @@ def run_summarization(patient_id: str) -> dict:
         
         result = json.loads(content)
         
-        # 🔥 FIX: Convert the result dict to a formatted string before storing
         summary_text = f"""MEDICAL REPORT SUMMARY
         ==================================================
 

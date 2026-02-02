@@ -5,40 +5,6 @@ from agents.head_meta_agent.chat_agent import run_chat
 from graph.state import AgentState
 
 
-def determine_intent(text_input: str) -> str:
-    """
-    Determines if text input is a report or a conversational query
-    
-    Args:
-        text_input: User's text input
-        
-    Returns:
-        "report" or "chat"
-    """
-    report_keywords = [
-        "blood test", "lab result", "scan", "x-ray", "mri", 
-        "diagnosis", "prescription", "medical report", "test result"
-    ]
-    
-    chat_keywords = [
-        "what is", "how is", "tell me", "explain", "show me",
-        "history", "previous", "compare", "?", "when", "why"
-    ]
-    
-    text_lower = text_input.lower()
-    
-    has_chat_keywords = any(keyword in text_lower for keyword in chat_keywords)
-    has_report_keywords = any(keyword in text_lower for keyword in report_keywords)
-    
-    if "?" in text_input or has_chat_keywords and not has_report_keywords:
-        return "chat"
-    
-    if has_report_keywords or len(text_input.split()) > 50:
-        return "report"
-    
-    return "chat"
-
-
 def process_input(state: AgentState) -> AgentState:
     """
     Head Meta Agent: Processes input based on type
@@ -66,26 +32,21 @@ def process_input(state: AgentState) -> AgentState:
             
         elif input_type == "audio":
             print(f"Processing audio file: {file_path}")
-            transcribed_text = run_stt_extraction(file_path)
-            state["extracted_text"] = transcribed_text
+            text_input = run_stt_extraction(file_path)
+            state["extracted_text"] = text_input
             state["confidence"] = 1.0
-            state["next_step"] = "save_document"
+            print("Processing as conversational query")
+            patient_id = state.get("patient_id", "pt-001")
+            chat_response = run_chat(text_input, patient_id)
+            state["final_response"] = chat_response
+            state["next_step"] = "end"
             
         elif input_type == "text":
-            intent = determine_intent(text_input)
-            
-            if intent == "chat":
-                print("Processing as conversational query")
-                patient_id = state.get("patient_id", "pt-001")
-                chat_response = run_chat(text_input, patient_id)
-                state["final_response"] = chat_response
-                state["next_step"] = "end"
-            else:
-                print("Processing as medical report text")
-                state["extracted_text"] = text_input
-                state["confidence"] = 1.0
-                state["next_step"] = "save_document"
-            
+            print("Processing as conversational query")
+            patient_id = state.get("patient_id", "pt-001")
+            chat_response = run_chat(text_input, patient_id)
+            state["final_response"] = chat_response
+            state["next_step"] = "end"
         else:
             raise ValueError(f"Unknown input type: {input_type}")
         
