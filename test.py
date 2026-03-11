@@ -12,7 +12,7 @@ from tools.ocr_tools import cleanup_temp_files
 
 # Page configuration
 st.set_page_config(
-    page_title="Medical Diagnosis System",
+    page_title="MedInsight",
     page_icon="🏥",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -373,7 +373,7 @@ if hasattr(st.session_state, 'quick_action'):
 st.divider()
 st.markdown("""
     <div style='text-align: center; color: #666; padding: 1rem;'>
-        Medical Report Diagnosis Agentic System | 
+        MedInsight | 
         Built with Streamlit | 
         Current Patient: <strong>{}</strong>
     </div>

@@ -2,7 +2,6 @@ from langgraph.graph import StateGraph, END
 from graph.state import AgentState
 from graph.nodes import (
     input_node,
-    document_save_node,
     extraction_node,
     summarization_node,
     search_params_node,
@@ -15,7 +14,8 @@ from graph.nodes import (
 
 def create_report_workflow():
     """
-    Creates the LangGraph workflow for report processing and summarization
+    Creates the LangGraph workflow for report processing and summarization.
+    OCR text flows directly from input_processing into extract_findings via state.
     
     Returns:
         Compiled LangGraph workflow for report processing
@@ -23,25 +23,16 @@ def create_report_workflow():
     workflow = StateGraph(AgentState)
     
     workflow.add_node("input_processing", input_node)
-    workflow.add_node("save_document", document_save_node)
     workflow.add_node("extract_findings", extraction_node)
     workflow.add_node("summarize", summarization_node)
     workflow.add_node("error", error_node)
     
     workflow.set_entry_point("input_processing")
     
+    # input_processing routes directly to extract_findings (pdf/image)
+    # or END (text/audio chat), or error
     workflow.add_conditional_edges(
         "input_processing",
-        route_next_step,
-        {
-            "save_document": "save_document",
-            "error": "error",
-            "end": END
-        }
-    )
-    
-    workflow.add_conditional_edges(
-        "save_document",
         route_next_step,
         {
             "extract_findings": "extract_findings",
@@ -150,7 +141,6 @@ def run_report_workflow(
         "current_values": None,
         "doctor_type": None,
         "location": None,
-        "search_params": None,
         "search_results": None,
         "top_doctors": None,
         "total_results": None,

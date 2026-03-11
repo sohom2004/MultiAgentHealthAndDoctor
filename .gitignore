@@ -4,3 +4,6 @@ storage/chroma
 health
 test2.py
 voice-input.mp3
+not-required/
+sample_reports/
+req.txt

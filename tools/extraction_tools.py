@@ -1,77 +1,134 @@
 import re
 import ast
 import json
+from datetime import datetime
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain.docstore.document import Document
 from config.settings import (
     CHROMA_DIR,
     EMBEDDING_MODEL,
-    REPORT_COLLECTION,
     FINDINGS_COLLECTION
 )
 
 
-def get_content(metadata: str) -> str:
+def get_next_report_id() -> str:
     """
-    Retrieves report content from ChromaDB using report_id
-    
-    Args:
-        metadata: Metadata string or dict containing report_id
-        
+    Generates the next sequential report ID based on existing findings collection entries.
+
     Returns:
-        Complete report text
+        Report ID string (e.g., "RPT-1")
     """
-    pattern = r"'report_id':\s*'([^']+)'"
-    match = re.search(pattern, str(metadata))
-    
-    if not match:
-        pattern = r'"report_id":\s*"([^"]+)"'
-        match = re.search(pattern, str(metadata))
-    
-    if not match:
-        raise ValueError("Could not extract report_id from metadata")
-    
-    report_id = match.group(1)
-    
     embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
     vector_store = Chroma(
-        collection_name=REPORT_COLLECTION,
+        collection_name=FINDINGS_COLLECTION,
         embedding_function=embeddings,
         persist_directory=str(CHROMA_DIR)
     )
-    
-    results = vector_store.get(
-        where={"report_id": report_id},
-        include=["documents", "metadatas"]
-    )
-    
-    txt = '\n'.join(results["documents"])
-    print(f"Retrieved {len(results['documents'])} chunks for report {report_id}")
-    
-    return txt
+
+    results = vector_store.get(include=["metadatas"])
+
+    if not results["metadatas"]:
+        return "RPT-1"
+
+    report_ids = [m["report_id"] for m in results["metadatas"] if "report_id" in m]
+
+    if not report_ids:
+        return "RPT-1"
+
+    max_id = max(int(r.split("-")[1]) for r in report_ids)
+    return f"RPT-{max_id + 1}"
+
+
+def _parse_input(action_input) -> dict:
+    """
+    Robustly parses the agent's input string into a dict using multiple strategies.
+    Handles: valid JSON, Python literals, unquoted keys, and partial regex extraction.
+    """
+    if isinstance(action_input, dict):
+        return action_input
+
+    raw = str(action_input).strip()
+    print(f"[save_findings] raw input: {raw!r}")
+
+    # Strategy 1: standard JSON
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    # Strategy 2: Python literal — handles single-quoted strings and Python booleans
+    try:
+        return ast.literal_eval(raw)
+    except Exception:
+        pass
+
+    # Strategy 3: quote bare (unquoted) keys then retry JSON
+    # Converts  {findings: [...]}  ->  {"findings": [...]}
+    try:
+        fixed = re.sub(r'(?<!["\'\w])([a-zA-Z_]\w*)\s*:', r'"\1":', raw)
+        return json.loads(fixed)
+    except Exception:
+        pass
+
+    # Strategy 4: regex field extraction as last resort
+    try:
+        findings, values, patient_id = [], {}, None
+
+        fm = re.search(r'"?findings"?\s*:\s*(\[.*?\])', raw, re.DOTALL)
+        if fm:
+            findings = json.loads(fm.group(1))
+
+        vm = re.search(r'"?values"?\s*:\s*(\{.*?\})', raw, re.DOTALL)
+        if vm:
+            values = json.loads(vm.group(1))
+
+        pm = re.search(r'"?patient_id"?\s*:\s*["\']([^"\']+)["\']', raw)
+        if pm:
+            patient_id = pm.group(1)
+
+        return {"findings": findings, "values": values, "patient_id": patient_id}
+    except Exception:
+        pass
+
+    raise ValueError(f"save_findings could not parse input: {raw!r}")
 
 
 def save_findings(action_input) -> str:
+    """
+    Generates metadata (report_id, patient_id, upload_date) and saves extracted
+    findings and values into the findings ChromaDB collection.
 
-    if isinstance(action_input, str):
-        try:
-            action_input = json.loads(action_input)
-        except json.JSONDecodeError:
-            try:
-                action_input = ast.literal_eval(action_input)
-            except Exception as e:
-                raise ValueError(f"Invalid input format for save_findings: {e}")
+    Args:
+        action_input: Dict or string (JSON / Python literal / unquoted-key dict) with:
+            - 'findings':   list of finding strings
+            - 'values':     dict of key-value medical data
+            - 'patient_id': patient identifier
 
-    if not isinstance(action_input, dict):
-        raise ValueError("save_findings input must be a dict or valid JSON string")
+    Returns:
+        JSON string of saved metadata: {report_id, patient_id, upload_date}
+    """
+    parsed = _parse_input(action_input)
 
-    findings = action_input.get("findings")
-    values = action_input.get("values")
-    metadata = action_input.get("metadata")
+    if not isinstance(parsed, dict):
+        raise ValueError("save_findings input must resolve to a dict")
 
-    if not metadata:
-        raise ValueError("Metadata is required")
+    findings   = parsed.get("findings", [])
+    values     = parsed.get("values", {})
+    patient_id = parsed.get("patient_id")
+
+    if not patient_id:
+        raise ValueError("patient_id is required in save_findings input")
+
+    # Metadata is generated here — never read from the document
+    report_id   = get_next_report_id()
+    upload_date = datetime.now().date().isoformat()
+
+    metadata = {
+        "report_id":   report_id,
+        "patient_id":  patient_id,
+        "upload_date": upload_date,
+    }
 
     embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
     vector_store = Chroma(
@@ -89,5 +146,5 @@ def save_findings(action_input) -> str:
     )
 
     vector_store.add_documents(documents=[document])
-    print(f"✅ Saved findings for report {metadata.get('report_id')}")
-    return "Findings saved successfully"
+    print(f"Saved findings for report {report_id} (patient: {patient_id}, date: {upload_date})")
+    return json.dumps(metadata)

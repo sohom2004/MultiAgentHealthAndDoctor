@@ -122,27 +122,15 @@ def clean_user_id(user_id: str) -> str:
     if not user_id:
         return ""
     
-    user_id = str(user_id).strip()
-    
-    while "user_id:" in user_id.lower():
-        parts = re.split(r'user_id:\s*', user_id, flags=re.IGNORECASE)
-        user_id = parts[-1].strip()
-    
-    user_id = user_id.replace("user_id", "").strip()
-    
-    patterns = [
-        r'(pt-\d+)',           
-        r'(patient-\d+)',      
-        r'(user-\d+)',         
-        r'([a-zA-Z]+-\d+)',    
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, user_id, re.IGNORECASE)
-        if match:
-            user_id = match.group(1).lower()
-            break
-    
-    user_id = user_id.strip()
-    
-    return user_id
+    # If input is a JSON string or dict, extract the user_id value
+    try:
+        if isinstance(user_id, dict):
+            return str(user_id.get("user_id", "")).strip()
+        if user_id.strip().startswith("{") and user_id.strip().endswith("}"):
+            import json
+            parsed = json.loads(user_id)
+            return str(parsed.get("user_id", "")).strip()
+    except Exception:
+        pass
+    # Otherwise, just strip whitespace
+    return str(user_id).strip()

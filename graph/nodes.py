@@ -1,5 +1,5 @@
 from graph.state import AgentState
-from agents.head_meta_agent.head_agent import process_input, save_document
+from agents.head_meta_agent.head_agent import process_input
 from agents.clinical_meta_agent.clinical_agent import extract_findings, summarize_report
 from agents.search_meta_agent.search_meta_agent import get_search_parameters, find_doctors, handle_search_error
 
@@ -11,16 +11,10 @@ def input_node(state: AgentState) -> AgentState:
     return process_input(state)
 
 
-def document_save_node(state: AgentState) -> AgentState:
-    """
-    Saves document to ChromaDB
-    """
-    return save_document(state)
-
-
 def extraction_node(state: AgentState) -> AgentState:
     """
-    Extracts findings through Clinical Meta Agent
+    Extracts findings through Clinical Meta Agent.
+    Reads extracted_text and patient_id directly from state.
     """
     return extract_findings(state)
 
