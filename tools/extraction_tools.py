@@ -11,6 +11,8 @@ from config.settings import (
     FINDINGS_COLLECTION
 )
 
+MAX_FINDINGS_PER_PATIENT = 10
+
 
 def get_next_report_id() -> str:
     """
@@ -38,6 +40,44 @@ def get_next_report_id() -> str:
 
     max_id = max(int(r.split("-")[1]) for r in report_ids)
     return f"RPT-{max_id + 1}"
+
+
+def _evict_oldest_findings(vector_store: Chroma, patient_id: str) -> None:
+    """
+    Enforces the MAX_FINDINGS_PER_PATIENT cap for a given patient.
+    Fetches all of the patient's findings, sorts them oldest-first by upload_date
+    (falling back to ChromaDB insertion order for same-date entries), and deletes
+    any beyond the cap.
+
+    Args:
+        vector_store: Already-initialised Chroma instance for FINDINGS_COLLECTION
+        patient_id:   Patient whose findings to trim
+    """
+    results = vector_store.get(
+        where={"patient_id": patient_id},
+        include=["metadatas"]
+    )
+
+    ids       = results.get("ids", [])
+    metadatas = results.get("metadatas", [])
+
+    if len(ids) <= MAX_FINDINGS_PER_PATIENT:
+        return  # nothing to evict
+
+    # Pair each ChromaDB id with its upload_date and original index so that
+    # ties (same date) are broken by insertion order (index = older → smaller).
+    indexed = sorted(
+        enumerate(zip(ids, metadatas)),
+        key=lambda x: (x[1][1].get("upload_date", ""), x[0])  # (date, insertion_idx)
+    )
+
+    # How many to remove
+    n_excess = len(ids) - MAX_FINDINGS_PER_PATIENT
+    to_delete = [chroma_id for _, (chroma_id, _) in indexed[:n_excess]]
+
+    vector_store.delete(ids=to_delete)
+    print(f"Evicted {len(to_delete)} oldest finding(s) for patient {patient_id} "
+          f"(cap={MAX_FINDINGS_PER_PATIENT})")
 
 
 def _parse_input(action_input) -> dict:
@@ -96,8 +136,9 @@ def _parse_input(action_input) -> dict:
 
 def save_findings(action_input) -> str:
     """
-    Generates metadata (report_id, patient_id, upload_date) and saves extracted
-    findings and values into the findings ChromaDB collection.
+    Generates metadata (report_id, patient_id, upload_date), saves extracted
+    findings and values into the findings ChromaDB collection, then enforces
+    the MAX_FINDINGS_PER_PATIENT cap by evicting the oldest entry if needed.
 
     Args:
         action_input: Dict or string (JSON / Python literal / unquoted-key dict) with:
@@ -147,4 +188,8 @@ def save_findings(action_input) -> str:
 
     vector_store.add_documents(documents=[document])
     print(f"Saved findings for report {report_id} (patient: {patient_id}, date: {upload_date})")
+
+    # Enforce the 10-finding cap — evict oldest if we're over the limit
+    _evict_oldest_findings(vector_store, patient_id)
+
     return json.dumps(metadata)
